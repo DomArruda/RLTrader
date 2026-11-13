@@ -26,7 +26,7 @@
     </div>
     <select id="algo" class="w-full bg-neutral-900 rounded p-2 text-sm"><option>PPO</option><option>A2C</option></select>
     <label class="text-xs text-neutral-400">Timesteps: <span id="tsLabel">20000</span>
-      <input id="timesteps" type="range" min="1000" max="200000" step="1000" value="20000" class="w-full accent-blue-500"></label>
+      <input id="timesteps" type="range" min="1000" max="50000" step="1000" value="20000" class="w-full accent-blue-500"></label>
     <label class="text-xs text-neutral-400">Lookback window: <span id="winLabel">10</span>
       <input id="window" type="range" min="5" max="60" value="10" class="w-full accent-blue-500"></label>
     <label class="text-xs text-neutral-400">Initial balance ($)
@@ -48,8 +48,9 @@
           <path d="M16 40 L74 36 C 84 37 88 44 88 52 C 88 68 84 82 70 88 L 36 90 C 24 90 16 82 16 68 Z" fill="#9c7350"/>
           <ellipse cx="70" cy="32" rx="6" ry="9" fill="#6e4a32"/>
           <ellipse cx="130" cy="88" rx="44" ry="16" fill="#a97c58" opacity="0.45"/>
-          <circle cx="46" cy="52" r="4" fill="#1a1008"/>
-          <circle cx="44.6" cy="50.6" r="1.4" fill="#f5e6d3"/>
+          <rect x="30" y="45" width="46" height="13" rx="6.5" fill="#111"/>
+          <rect x="34" y="47.5" width="7" height="4" rx="2" fill="#5a6470"/>
+          <rect x="56" y="47.5" width="7" height="4" rx="2" fill="#5a6470"/>
           <ellipse cx="19" cy="56" rx="2.5" ry="3.5" fill="#3d2a1b"/>
           <path d="M20 74 q8 5 16 2" stroke="#5d3f2b" stroke-width="2" fill="none" stroke-linecap="round"/>
         </svg>

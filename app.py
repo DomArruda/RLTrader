@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+from functools import lru_cache
 
 import gymnasium as gym
 import numpy as np
@@ -15,6 +16,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 # ---------- environment ----------
+@lru_cache(maxsize=16)
 def load_data(tickers, start, end):
     df = yf.download(tickers, start=start, end=end, auto_adjust=True)["Close"]
     if isinstance(df, pd.Series):
@@ -122,7 +124,7 @@ class ProgressCallback(BaseCallback):
 def run_training(p: dict):
     try:
         set_state(phase="fetching")
-        prices = load_data(p["tickers"], p["start"], p["end"])
+        prices = load_data(tuple(p["tickers"]), p["start"], p["end"])
         if prices.empty:
             raise ValueError("No data for these tickers/dates.")
         dates = prices.index
@@ -157,14 +159,17 @@ def run_training(p: dict):
 
 
 def start_training(p: dict):
-    if snapshot().get("phase") in ("training", "acting", "fetching"):
-        return False
+    with lock:
+        if state.get("phase") in ("training", "acting", "fetching"):
+            return False
+        state.clear()
+        state.update(phase="fetching")  # claim the slot before spawning
     threading.Thread(target=run_training, args=(p,), daemon=True).start()
     return True
 
 
 # ---------- UI ----------
-st.set_page_config(page_title="RL Portfolio Manager", layout="wide")
+st.set_page_config(page_title="RL Portfolio Manager", page_icon=os.path.join(os.path.dirname(os.path.abspath(__file__)), "capy.png"), layout="wide")
 
 ui = components.declare_component("rltrader", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend"))
 
@@ -172,7 +177,8 @@ msg = ui(state=snapshot(), key="rltrader")
 
 if msg and msg.get("event") == "train" and st.session_state.get("handled") != msg.get("nonce"):
     st.session_state.handled = msg.get("nonce")
-    start_training(msg["params"])
+    if not start_training(msg["params"]):
+        st.toast("Busy — another session is already training, you'll see its progress")
 
 if snapshot().get("phase") in ("fetching", "training", "acting"):
     time.sleep(1.0)
