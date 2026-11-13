@@ -84,19 +84,22 @@ class PortfolioEnv(gym.Env):
 
 
 # ---------- training ----------
-state = {"phase": "idle"}  # phases: idle, fetching, training, acting, done, error
-lock = threading.Lock()
+@st.cache_resource
+def _shared():
+    return {"state": {"phase": "idle"}, "lock": threading.Lock()}  # phases: idle, fetching, training, acting, done, error
 
 
 def set_state(**kw):
-    with lock:
-        state.clear()
-        state.update(kw)
+    s = _shared()
+    with s["lock"]:
+        s["state"].clear()
+        s["state"].update(kw)
 
 
 def snapshot():
-    with lock:
-        return dict(state)
+    s = _shared()
+    with s["lock"]:
+        return dict(s["state"])
 
 
 class ProgressCallback(BaseCallback):
@@ -159,11 +162,12 @@ def run_training(p: dict):
 
 
 def start_training(p: dict):
-    with lock:
-        if state.get("phase") in ("training", "acting", "fetching"):
+    s = _shared()
+    with s["lock"]:
+        if s["state"].get("phase") in ("training", "acting", "fetching"):
             return False
-        state.clear()
-        state.update(phase="fetching")  # claim the slot before spawning
+        s["state"].clear()
+        s["state"].update(phase="fetching")  # claim the slot before spawning
     threading.Thread(target=run_training, args=(p,), daemon=True).start()
     return True
 
