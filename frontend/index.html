@@ -1,0 +1,140 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+@keyframes idle { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+@keyframes train-bounce { 0%,100% { transform: rotate(-8deg) } 50% { transform: rotate(8deg) } }
+@keyframes run { 0%,100% { transform: translateX(0) scaleX(1) } 49% { transform: translateX(120px) scaleX(1) } 50% { transform: translateX(120px) scaleX(-1) } 99% { transform: translateX(0) scaleX(-1) } 100% { transform: translateX(0) scaleX(1) } }
+@keyframes flop { 0%,100% { transform: rotate(0) } 100% { transform: rotate(-90deg) translateY(10px) } }
+#capibara { font-size: 56px; display: inline-block; }
+#capibara.idle { animation: idle 2s ease-in-out infinite; }
+#capibara.training { animation: train-bounce .3s ease-in-out infinite; }
+#capibara.acting { animation: run 1.2s linear infinite; }
+#capibara.done { animation: flop 1s ease-in forwards; }
+#capibara.error { filter: grayscale(1); transform: rotate(180deg); }
+</style>
+</head>
+<body class="bg-neutral-950 text-neutral-200 p-6 font-sans">
+<div class="flex gap-8">
+  <div class="w-80 space-y-3">
+    <input id="tickers" value="SPY, QQQ, GLD, SHY" class="w-full bg-neutral-900 rounded p-2 text-sm" placeholder="Tickers (last = cash)">
+    <div class="flex gap-2">
+      <input id="start" type="date" value="2024-01-01" class="w-1/2 bg-neutral-900 rounded p-2 text-sm">
+      <input id="end" type="date" class="w-1/2 bg-neutral-900 rounded p-2 text-sm">
+    </div>
+    <select id="algo" class="w-full bg-neutral-900 rounded p-2 text-sm"><option>PPO</option><option>A2C</option></select>
+    <label class="text-xs text-neutral-400">Timesteps: <span id="tsLabel">20000</span>
+      <input id="timesteps" type="range" min="1000" max="200000" step="1000" value="20000" class="w-full accent-blue-500"></label>
+    <label class="text-xs text-neutral-400">Lookback window: <span id="winLabel">10</span>
+      <input id="window" type="range" min="5" max="60" value="10" class="w-full accent-blue-500"></label>
+    <label class="text-xs text-neutral-400">Initial balance ($)
+      <input id="balance" type="number" value="10000" class="w-full bg-neutral-900 rounded p-2 text-sm"></label>
+    <label class="text-xs text-neutral-400">Fee: <span id="feeLabel">0.0010</span>
+      <input id="fee" type="range" min="0" max="0.02" step="0.0005" value="0.001" class="w-full accent-blue-500"></label>
+    <label class="text-xs text-neutral-400">Episode length: <span id="epLabel">250</span>
+      <input id="ep" type="range" min="50" max="1000" value="250" class="w-full accent-blue-500"></label>
+    <button id="go" class="w-full bg-blue-600 hover:bg-blue-500 rounded p-2 font-semibold">Train &amp; watch</button>
+    <div id="status" class="text-sm text-neutral-400"></div>
+    <div class="bg-neutral-900 rounded p-4 text-center mt-4">
+      <div id="capibara" class="idle">
+        <svg viewBox="0 0 220 130" width="132" height="78">
+          <rect x="84" y="96" width="16" height="28" rx="7" fill="#6e4a32"/>
+          <rect x="106" y="98" width="16" height="26" rx="7" fill="#6e4a32"/>
+          <rect x="150" y="98" width="16" height="26" rx="7" fill="#6e4a32"/>
+          <rect x="172" y="96" width="16" height="28" rx="7" fill="#6e4a32"/>
+          <ellipse cx="130" cy="74" rx="58" ry="33" fill="#9c7350"/>
+          <path d="M16 40 L74 36 C 84 37 88 44 88 52 C 88 68 84 82 70 88 L 36 90 C 24 90 16 82 16 68 Z" fill="#9c7350"/>
+          <ellipse cx="70" cy="32" rx="6" ry="9" fill="#6e4a32"/>
+          <ellipse cx="130" cy="88" rx="44" ry="16" fill="#a97c58" opacity="0.45"/>
+          <circle cx="46" cy="52" r="4" fill="#1a1008"/>
+          <circle cx="44.6" cy="50.6" r="1.4" fill="#f5e6d3"/>
+          <ellipse cx="19" cy="56" rx="2.5" ry="3.5" fill="#3d2a1b"/>
+          <path d="M20 74 q8 5 16 2" stroke="#5d3f2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div id="burbuja" class="text-xs text-amber-400 mt-2 min-h-[32px]">The capybara awaits orders...</div>
+    </div>
+  </div>
+  <div class="flex-1 space-y-4">
+    <div id="chartWrap" class="bg-neutral-900 rounded p-4 h-96"><div id="chart" class="w-full h-full"></div></div>
+    <div id="weights" class="flex gap-2"></div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let lastN = 0;
+const sliders = [["timesteps","tsLabel"],["window","winLabel"],["ep","epLabel"]];
+sliders.forEach(([s,l]) => $(s).oninput = () => $(l).textContent = $(s).value);
+$("fee").oninput = () => $("feeLabel").textContent = (+$("fee").value).toFixed(4);
+$("end").value = new Date().toISOString().slice(0,10);
+
+/* --- Streamlit component protocol (no build step) --- */
+function sendMessageToStreamlitClient(type, data) {
+  window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: type}, data), "*");
+}
+function init() { sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1}); }
+function setFrameHeight(h) { sendMessageToStreamlitClient("streamlit:setFrameHeight", {height: h}); }
+function sendValue(v) { sendMessageToStreamlitClient("streamlit:setComponentValue", {value: v}); }
+window.addEventListener("message", (event) => {
+  if (event.data.type === "streamlit:render") {
+    const a = typeof event.data.args === "string" ? JSON.parse(event.data.args) : event.data.args;
+    render(a.state ?? a[0]);
+    setFrameHeight(720);
+  }
+});
+
+function render(s) {
+  $("status").textContent = {idle:"Idle.", fetching:"Fetching data...", training:"Training... step "
+    + (s.timesteps||0) + "/" + (s.total||"?") + " (ep reward " + (s.ep_reward||0) + ")",
+    acting:"Agent acting...", done:"Done.", error:"Error: " + (s.message||"")}[s.phase] || s.phase;
+  const capi = $("capibara"), burbuja = $("burbuja");
+  capi.className = s.phase;
+  burbuja.textContent = {
+    idle: "The capybara awaits orders... 🌿",
+    fetching: "Fetching market data... 📊",
+    training: ["Training! Step " + (s.timesteps||0) + " of " + (s.total||"?") + " 💪",
+               "Reading charts, chewing grass... 🌾",
+               "This market stresses me out... but I persist. 😤",
+               "Current reward: " + (s.ep_reward||0) + "! 🥕"][Math.floor(Date.now()/2000) % 4],
+    acting: ["Buying before it's too late! 📈",
+             "Selling everything, I'm scared... 😰",
+             "Hmm... this stock smells weird. 🤔",
+             "All cash — zen capybara mode. 🧘",
+             "Diversify, my friend, diversify! 🎯"][Math.floor(Date.now()/1500) % 5],
+    done: "Trades closed! The capybara takes a nap. 😴",
+    error: "Oh no! Something broke: " + (s.message||"") + " 💔"
+  }[s.phase] || "...";
+  const c = s.curve || [];
+  if (c.length > 1 && c.length !== lastN) {
+    lastN = c.length;
+    Plotly.react("chart", [
+      {x: c.map(p => p.date), y: c.map(p => p.rl), name: "RL Agent", mode: "lines", line: {color: "#3b82f6"}},
+      {x: c.map(p => p.date), y: c.map(p => p.bh), name: "Buy & Hold", mode: "lines", line: {color: "#737373"}}
+    ], {
+      paper_bgcolor: "#171717", plot_bgcolor: "#171717", font: {color: "#a3a3a3"},
+      margin: {l: 60, r: 20, t: 10, b: 40}, height: 350, showlegend: true,
+      legend: {orientation: "h", y: 1.1},
+      xaxis: {gridcolor: "#262626"}, yaxis: {gridcolor: "#262626", tickprefix: "$"}
+    }, {displayModeBar: false, responsive: true});
+  }
+  if (s.weights && s.weights.length) {
+    const w = s.weights[s.weights.length - 1];
+    const colors = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f472b6"];
+    $("weights").innerHTML = w.map((v, i) =>
+      `<div class="flex-1"><div class="text-xs text-neutral-400 mb-1">${(s.tickers[i]||"?")}: ${(v*100).toFixed(0)}%</div>
+       <div class="bg-neutral-800 rounded-full h-3"><div class="rounded-full h-3" style="width:${v*100}%;background:${colors[i%7]}"></div></div></div>`).join("");
+  }
+}
+
+$("go").onclick = () => {
+  sendValue({event: "train", nonce: Date.now(), params: {
+    tickers: $("tickers").value.split(",").map(t => t.trim().toUpperCase()).filter(Boolean),
+    start: $("start").value, end: $("end").value, algo: $("algo").value,
+    timesteps: +$("timesteps").value, window: +$("window").value,
+    balance: +$("balance").value, fee: +$("fee").value, episode_length: +$("ep").value}});
+};
+init();
+</script>
+</body></html>

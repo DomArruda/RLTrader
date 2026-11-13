@@ -1,0 +1,7 @@
+streamlit
+pyarrow
+gymnasium
+stable-baselines3[extra]
+yfinance
+pandas
+numpy
