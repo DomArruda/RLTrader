@@ -21,12 +21,16 @@
   <div class="w-80 space-y-3">
     <input id="tickers" value="SPY, QQQ, GLD, SHY" class="w-full bg-neutral-900 rounded p-2 text-sm" placeholder="Tickers (last = cash)">
     <div class="flex gap-2">
+      <input id="randN" type="number" value="5" min="1" max="20" class="w-16 bg-neutral-900 rounded p-2 text-sm" title="How many random stocks">
+      <button id="random" type="button" class="flex-1 bg-neutral-700 hover:bg-neutral-600 rounded p-2 text-sm">Random S&amp;P 500 + cash</button>
+    </div>
+    <div class="flex gap-2">
       <input id="start" type="date" value="2024-01-01" class="w-1/2 bg-neutral-900 rounded p-2 text-sm">
       <input id="end" type="date" class="w-1/2 bg-neutral-900 rounded p-2 text-sm">
     </div>
     <select id="algo" class="w-full bg-neutral-900 rounded p-2 text-sm"><option>PPO</option><option>A2C</option></select>
-    <label class="text-xs text-neutral-400">Timesteps: <span id="tsLabel">20000</span>
-      <input id="timesteps" type="range" min="1000" max="50000" step="1000" value="20000" class="w-full accent-blue-500"></label>
+    <label class="text-xs text-neutral-400">Timesteps: <span id="tsLabel">5000</span>
+      <input id="timesteps" type="range" min="1000" max="50000" step="1000" value="5000" class="w-full accent-blue-500"></label>
     <label class="text-xs text-neutral-400">Lookback window: <span id="winLabel">10</span>
       <input id="window" type="range" min="5" max="60" value="10" class="w-full accent-blue-500"></label>
     <label class="text-xs text-neutral-400">Initial balance ($)
@@ -73,6 +77,36 @@ const sliders = [["timesteps","tsLabel"],["window","winLabel"],["ep","epLabel"]]
 sliders.forEach(([s,l]) => $(s).oninput = () => $(l).textContent = $(s).value);
 $("fee").oninput = () => $("feeLabel").textContent = (+$("fee").value).toFixed(4);
 $("end").value = new Date().toISOString().slice(0,10);
+const SP500 = ("A AAPL ABBV ABNB ABT ACGL ACN ADBE ADI ADSK AEE AEP AES AFL AIG AIZ ALB ALGN ALLE ALL AMAT AMCR AMD AME AMGN AMP AMT ANET ANSS AON AOS APA APD APH APO APP ARE ARM ATI AVB AVGO AVY AWK AXP AXON AZO AYI " +
+"BA BAC BALL BAX BBWI BBY BDX BEN BF-B BG BK BKNG BKR BLDR BLK BMY BR BRO BRK-B BSX BWA BWXT BXP " +
+"C CAH CAG CB CBOE CBRE CC CCL CDNS CDW CE CEG CF CFG CHD CHRW CHTR CI CINF CL CMCSA CMA CMG CMI CNC CNP COF COIN COP COR COO COST CPB CPRT CRL CRM CSGP CSCO CSX CTAS CTRA CTVA CVX CW CZR " +
+"DAL DASH DAVA DD DDOG DE DELL DHI DG DGX DIS DKS DLTR DLR DOV DOW DRI DTE DUK DPZ DVN DXC DXCM " +
+"EA EBAY ECL ED EFX EIX EL ELV EMN EMR EOG EPAM EPD EQIX EQR ERIE ES ESS ET ETN ETR ETSY EVRG EW EXC EXP EXPD EXR " +
+"F FANG FAST FCNCA FDX FE FFIV FICO FI FITB FIVN FLS FLT FMC FN FOX FOXA FRT FTI FTNT FSLR FTV " +
+"GD GE GEHC GEN GEV GDDY GILD GIS GL GLW GM GNRC GOOG GOOGL GPC GRMN GT GWW GS " +
+"HAL HAS HBAN HCA HD HES HEI HIG HII HLT HOG HOLX HON HPE HPQ HRL HSIC HSY HUBB HUM HWM " +
+"IBM IDXX IEX IFF ILMN INCY INTC INTU IP IPG IPGP IR IRM ISRG IT ITT ITW " +
+"J JBHT JCI JKHY JNJ JPM " +
+"K KDP KEY KEYS KHC KIM KLAC KMB KMI KMX KO KR KVUE " +
+"L LDOS LECO LFG LH LHX LII LIN LKQ LNTH LEN LNC LNT LLY LMT LOW LRCX LUV LYB LUMN LYV LW " +
+"MA MAA MAR MAS MAT MCD MCHP MCK MCO MDLZ MDT MET MHK MKC MLM MMC MNST MO MOH MOS MPC MPWR MRK MRNA MRTX MSCI MSFT MSI MTD MTB MTCH MU " +
+"NDAQ NDSN NEE NE NEM NFLX NKE NI NJR NOC NOV NOW NRG NSC NTAP NTRS NUE NVDA NVR NWSA NWS NXPI " +
+"O OC ODFL OI OKE OLN OMC ON ORCL ORLY OTIS OXY OZK " +
+"PAYX PAYC PB PEAK PEG PENN PEP PFE PFG PG PGR PH PHIN PHM PKG PLD PL PM PNC PNR PNW POR PPG PPL PRU PSA PSX PTC PWR PYPL " +
+"QCOM QRVO " +
+"RCL REG REGN RE RF RHI RJF RL RMD ROK ROKU ROL ROP ROST RPM RSG RTX " +
+"SBAC SBUX SCHW SEE SEDG SHW SJM SLB SLG SNA SNPS SO SPG SPGI SPOT STE STLD STT STZ SW SWK SWKS SYF SYK SYY SMCI " +
+"T TAP TDG TDY TECH TEL TER TFC TGNA TGT THC TJX TKR TMO TMUS TROW TRMB TSCO TSLA TRI TRU TRV TT TTWO TTD TXN TXT TYL " +
+"UAL UBER UDR UHS UFPI ULTA UMBF UNH UNM UNP UPS URI USB " +
+"V VFC VLO VMC VRSK VRSN VST VTR VTRS VRT VRTX VZ " +
+"WAB WAT WBD WCC WDC WDAY WEC WELL WFC WH WM WMB WMT WPC WRB WHR WST WY " +
+"XEL XOM XRAY XYL " +
+"YUM YUMC " +
+"ZBH ZBRA ZION ZTS").split(" ");
+$("random").onclick = () => {
+  const n = Math.min(20, Math.max(1, +$("randN").value || 5));
+  $("tickers").value = [...SP500].sort(() => Math.random() - .5).slice(0, n).join(", ") + ", CASH";
+};
 
 /* --- Streamlit component protocol (no build step) --- */
 function sendMessageToStreamlitClient(type, data) {

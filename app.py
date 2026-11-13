@@ -18,10 +18,16 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 # ---------- environment ----------
 @lru_cache(maxsize=16)
 def load_data(tickers, start, end):
-    df = yf.download(tickers, start=start, end=end, auto_adjust=True)["Close"]
+    tickers = [t.upper() for t in tickers]
+    download = [t for t in tickers if t != "CASH"]
+    df = yf.download(download, start=start, end=end, auto_adjust=True)["Close"]
     if isinstance(df, pd.Series):
-        df = df.to_frame()
-    return df.dropna()
+        df = df.to_frame(download[0])
+    df = df.dropna(axis=1, how="all").dropna()  # drop dead tickers, then rows with gaps
+    if "CASH" in tickers:
+        df["CASH"] = 1.0  # env never uses the last asset's returns; constant is enough
+        df = df[[t for t in tickers if t in df.columns]]  # preserve user order, CASH last
+    return df
 
 
 class PortfolioEnv(gym.Env):
